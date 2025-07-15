@@ -1,0 +1,53 @@
+{
+  "name": "secure-microservice",
+  "version": "1.0.0",
+  "description": "A secure Node.js microservice with MongoDB for DevSecOps assessment",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "security:audit": "npm audit",
+    "security:check": "npm audit --audit-level moderate"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "mongodb",
+    "security",
+    "devsecops"
+  ],
+  "author": "DevSecOps Candidate",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "helmet": "^7.0.0",
+    "express-rate-limit": "^6.10.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "eslint": "^8.47.0",
+    "eslint-config-standard": "^17.1.0",
+    "eslint-plugin-import": "^2.28.1",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^6.1.1",
+    "jest": "^29.6.4",
+    "supertest": "^6.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/username/secure-microservice"
+  },
+  "bugs": {
+    "url": "https://github.com/username/secure-microservice/issues"
+  }
+}

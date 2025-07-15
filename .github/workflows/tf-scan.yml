@@ -1,0 +1,154 @@
+name: Infrastructure Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '**/**/*.tf'
+      - '**/**/*.tfvars'
+      - '**/**/*.hcl'
+      - '.github/workflows/tf-scan.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '**/*.hcl'
+  workflow_dispatch:
+
+jobs:
+  infrastructure-scan:
+    name: Checkov Infrastructure Scan
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+      pull-requests: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Checkov
+      run: |
+        python -m pip install --upgrade pip
+        pip install checkov
+    
+    - name: Create results directory
+      run: mkdir -p checkov-results
+    
+    - name: Run Checkov scan
+      run: |
+        checkov -d . \
+          --framework terraform \
+          --output cli \
+          --output json \
+          --output-file-path checkov-results/checkov-report.json \
+          --output sarif \
+          --output-file-path checkov-results/checkov-report.sarif \
+          --soft-fail \
+          --compact
+      continue-on-error: true
+    
+    - name: Upload Checkov results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: checkov-results/checkov-report.sarif
+        category: infrastructure-security
+    
+    - name: Upload Checkov results as artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: checkov-results
+        path: checkov-results/
+        retention-days: 30
+    
+    - name: Parse Checkov results
+      if: always()
+      run: |
+        if [ -f checkov-results/checkov-report.json ]; then
+          echo "## 🔍 Infrastructure Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          
+          # Extract summary from JSON
+          PASSED=$(jq '.summary.passed' checkov-results/checkov-report.json)
+          FAILED=$(jq '.summary.failed' checkov-results/checkov-report.json)
+          SKIPPED=$(jq '.summary.skipped' checkov-results/checkov-report.json)
+          
+          echo "| Status | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ⏭️ Skipped | $SKIPPED |" >> $GITHUB_STEP_SUMMARY
+          
+          # Show top failed checks
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Top Failed Checks" >> $GITHUB_STEP_SUMMARY
+          jq -r '.results.failed_checks[] | "- **\(.check_name)**: \(.file_path):\(.file_line_range[0])"' checkov-results/checkov-report.json | head -10 >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          
+          if (!fs.existsSync('checkov-results/checkov-report.json')) {
+            return;
+          }
+          
+          const results = JSON.parse(fs.readFileSync('checkov-results/checkov-report.json', 'utf8'));
+          
+          const passed = results.summary.passed;
+          const failed = results.summary.failed;
+          const skipped = results.summary.skipped;
+          
+          let comment = `## 🔍 Infrastructure Security Scan Results
+          
+          | Status | Count |
+          |--------|-------|
+          | ✅ Passed | ${passed} |
+          | ❌ Failed | ${failed} |
+          | ⏭️ Skipped | ${skipped} |
+          `;
+          
+          if (failed > 0) {
+            comment += `\n### ❌ Failed Checks (Top 5)\n`;
+            const failedChecks = results.results.failed_checks.slice(0, 5);
+            failedChecks.forEach(check => {
+              comment += `- **${check.check_name}**: \`${check.file_path}:${check.file_line_range[0]}\`\n`;
+            });
+            comment += `\n📋 View full report in the Actions tab or download the artifact.`;
+          }
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+    
+    - name: Set job status
+      if: always()
+      run: |
+        if [ -f checkov-results/checkov-report.json ]; then
+          FAILED=$(jq '.summary.failed' checkov-results/checkov-report.json)
+          if [ "$FAILED" -gt 0 ]; then
+            echo "❌ Infrastructure scan found $FAILED security issues"
+            # Uncomment the next line to fail the job on findings
+            # exit 1
+          else
+            echo "✅ Infrastructure scan completed successfully"
+          fi
+        fi

@@ -1,0 +1,11 @@
+# Ignore Terraform files
+terraform/environment/*/.terraform.lock.hcl
+terraform/environment/*/*.tfstate
+terraform/environment/*/*.tfstate.*
+terraform/environment/*/.terraform/
+terraform/environment/*/terraform.tfstate
+terraform/environment/*/terraform.tfstate.backup
+.DS_Store
+
+node_modules/
+web-app/node_modules/
